@@ -25,6 +25,7 @@ package cronjob
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -158,6 +159,8 @@ type CronJobSpec struct {
 	// This tests that the schemaless marker works
 	// +kubebuilder:validation:Schemaless
 	Schemaless []byte `json:"schemaless,omitempty"`
+
+	URL *URL `json:"url,omitempty"`
 }
 
 // +kubebuilder:validation:Type=object
@@ -265,6 +268,59 @@ const (
 	// ReplaceConcurrent cancels currently running job and replaces it with a new one.
 	ReplaceConcurrent ConcurrencyPolicy = "Replace"
 )
+
+// +kubebuilder:validation:Type=string
+type URL url.URL
+
+// MarshalJSON implements a custom json marshal method used when this type is
+// marshaled using json.Marshal.
+// json.Marshaler impl
+func (u URL) MarshalJSON() ([]byte, error) {
+	b := fmt.Sprintf("%q", u.String())
+	return []byte(b), nil
+}
+
+// ParseURL attempts to parse the given string as a URL.
+// Compatible with net/url.Parse except in the case of an empty string, where
+// the resulting *URL will be nil with no error.
+func ParseURL(u string) (*URL, error) {
+	if u == "" {
+		return nil, nil
+	}
+	pu, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	return (*URL)(pu), nil
+}
+
+// UnmarshalJSON implements the json unmarshal method used when this type is
+// unmarsheled using json.Unmarshal.
+// json.Unmarshaler impl
+func (u *URL) UnmarshalJSON(b []byte) error {
+	var ref string
+	if err := json.Unmarshal(b, &ref); err != nil {
+		return err
+	}
+	if r, err := ParseURL(ref); err != nil {
+		return err
+	} else if r != nil {
+		*u = *r
+	} else {
+		*u = URL{}
+	}
+
+	return nil
+}
+
+// String returns the full string representation of the URL.
+func (u *URL) String() string {
+	if u == nil {
+		return ""
+	}
+	uu := url.URL(*u)
+	return uu.String()
+}
 
 // CronJobStatus defines the observed state of CronJob
 type CronJobStatus struct {
