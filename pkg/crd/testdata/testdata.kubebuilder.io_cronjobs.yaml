@@ -3954,8 +3954,22 @@ spec:
                   foo:
                     type: string
                 type: object
+              nestedObjectAsString:
+                description: This tests that an explicitly defined type short circuits type resolution. The nested object's type (object) should not collide with the overridden type (string).
+                properties:
+                  bar:
+                    type: boolean
+                  foo:
+                    type: string
+                required:
+                - bar
+                - foo
+                type: object
               noReallySuspend:
                 description: This flag is like suspend, but for when you really mean it. It helps test the +kubebuilder:validation:Type marker.
+                type: string
+              nonJson:
+                description: This tests that structs with no JSON keys (i.e. Golang's URL) work if their type is explicitly overridden.
                 type: string
               patternObject:
                 description: This tests that pattern validator is properly applied.

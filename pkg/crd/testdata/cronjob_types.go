@@ -152,12 +152,21 @@ type CronJobSpec struct {
 	// +kubebuilder:validation:optional
 	JustNestedObject *JustNestedObject `json:"justNestedObject,omitempty"`
 
+	// This tests that an explicitly defined type short circuits type resolution.
+	// The nested object's type (object) should not collide with the overridden
+	// type (string).
+	NestedObjectAsString *NestedObjectAsString `json:"nestedObjectAsString,omitempty"`
+
 	// This tests that min/max properties work
 	MinMaxProperties MinMaxObject `json:"minMaxProperties,omitempty"`
 
 	// This tests that the schemaless marker works
 	// +kubebuilder:validation:Schemaless
 	Schemaless []byte `json:"schemaless,omitempty"`
+
+	// This tests that structs with no JSON keys (i.e. Golang's URL) work if their type
+	// is explicitly overridden.
+	NonJson *NonJson `json:"nonJson,omitempty"`
 }
 
 // +kubebuilder:validation:Type=object
@@ -198,6 +207,9 @@ type NestedObject struct {
 }
 
 type JustNestedObject NestedObject
+
+// +kubebuilder:validation:Type=string
+type NestedObjectAsString NestedObject
 
 // +kubebuilder:validation:MinProperties=1
 // +kubebuilder:validation:MaxProperties=2
@@ -265,6 +277,19 @@ const (
 	// ReplaceConcurrent cancels currently running job and replaces it with a new one.
 	ReplaceConcurrent ConcurrencyPolicy = "Replace"
 )
+
+// +kubebuilder:validation:Type=string
+// NonJson is a struct with no JSON tags that's manually marshalled.
+type NonJson struct {
+	Field string
+}
+
+func (n NonJson) MarshalJSON() ([]byte, error) {
+	return []byte(`"foo"`), nil
+}
+func (n NonJson) UnmarshalJSON(in []byte) error {
+	return nil
+}
 
 // CronJobStatus defines the observed state of CronJob
 type CronJobStatus struct {
