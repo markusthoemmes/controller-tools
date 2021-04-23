@@ -502,10 +502,24 @@ func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSON
 
 	allowedFields := allowedFields[ctx.pkg.ID+"."+ctx.info.RawSpec.Name.String()]
 	for _, field := range ctx.info.Fields {
+		fieldN := field.Name
+		if fieldN == "" {
+			// This is an embedded type. It may either be a pointer type or a direct
+			// identifier. We take it's type name as field name since that's what Golang
+			// struct construction essentially comes down to.
+			if selector, ok := field.RawField.Type.(*ast.SelectorExpr); ok {
+				fieldN = selector.Sel.Name
+			} else if ident, ok := field.RawField.Type.(*ast.Ident); ok {
+				fieldN = ident.Name
+			} else {
+				ctx.pkg.AddError(loader.ErrFromNode(fmt.Errorf("encountered unexpected embedded type"), field.RawField))
+				return props
+			}
+		}
 
 		var overrides schemaOverrides
 		if allowedFields != nil {
-			if o, ok := allowedFields[field.Name]; !ok {
+			if o, ok := allowedFields[fieldN]; !ok {
 				continue
 			} else {
 				overrides = o
