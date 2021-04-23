@@ -415,9 +415,13 @@ var allowedFields = map[string]map[string]schemaOverrides{
 		"Path":        {},
 		"Scheme":      {},
 		"HTTPHeaders": {},
+		// Needed by the system
+		"Port": {forceOptional: true},
 	},
 	"k8s.io/api/core/v1.TCPSocketAction": {
 		"Host": {},
+		// Needed by the system
+		"Port": {forceOptional: true},
 	},
 	"k8s.io/api/core/v1.ContainerPort": {
 		"ContainerPort": {},
