@@ -322,6 +322,15 @@ type schemaOverrides struct {
 	forceOptional bool
 }
 
+// Preserve unknown fields for a few types to allow for proper validation.
+var perserveUnknownOverrides = map[string]bool{
+	"k8s.io/api/core/v1.PodSpec":         true,
+	"k8s.io/api/core/v1.Container":       true,
+	"k8s.io/api/core/v1.HTTPGetAction":   true,
+	"k8s.io/api/core/v1.TCPSocketAction": true,
+	"k8s.io/api/core/v1.ContainerPort":   true,
+}
+
 var allowedFields = map[string]map[string]schemaOverrides{
 	"k8s.io/api/core/v1.Volume": {
 		"Name":         {},
@@ -415,13 +424,9 @@ var allowedFields = map[string]map[string]schemaOverrides{
 		"Path":        {},
 		"Scheme":      {},
 		"HTTPHeaders": {},
-		// Needed by the system
-		"Port": {forceOptional: true},
 	},
 	"k8s.io/api/core/v1.TCPSocketAction": {
 		"Host": {},
-		// Needed by the system
-		"Port": {forceOptional: true},
 	},
 	"k8s.io/api/core/v1.ContainerPort": {
 		"ContainerPort": {},
@@ -504,7 +509,8 @@ func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSON
 		return props
 	}
 
-	allowedFields := allowedFields[ctx.pkg.ID+"."+ctx.info.RawSpec.Name.String()]
+	typN := ctx.pkg.ID + "." + ctx.info.RawSpec.Name.String()
+	allowedFields := allowedFields[typN]
 	for _, field := range ctx.info.Fields {
 		fieldN := field.Name
 		if fieldN == "" {
@@ -593,6 +599,10 @@ func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSON
 		}
 
 		props.Properties[fieldName] = *propSchema
+	}
+
+	if preserveUnknown, ok := perserveUnknownOverrides[typN]; ok {
+		props.XPreserveUnknownFields = &preserveUnknown
 	}
 
 	return props
