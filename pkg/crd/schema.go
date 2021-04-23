@@ -318,6 +318,175 @@ func mapToSchema(ctx *schemaContext, mapType *ast.MapType) *apiext.JSONSchemaPro
 	}
 }
 
+type schemaOverrides struct {
+	forceOptional bool
+}
+
+var allowedFields = map[string]map[string]schemaOverrides{
+	"k8s.io/api/core/v1.Volume": {
+		"Name":         {},
+		"VolumeSource": {},
+	},
+	"k8s.io/api/core/v1.VolumeSource": {
+		"Secret":    {},
+		"ConfigMap": {},
+		"Projected": {},
+	},
+	"k8s.io/api/core/v1.VolumeProjection": {
+		"Secret":              {},
+		"ConfigMap":           {},
+		"ServiceAccountToken": {},
+	},
+	"k8s.io/api/core/v1.ConfigMapProjection": {
+		"LocalObjectReference": {},
+		"Items":                {},
+		"Optional":             {},
+	},
+	"k8s.io/api/core/v1.SecretProjection": {
+		"LocalObjectReference": {},
+		"Items":                {},
+		"Optional":             {},
+	},
+	"k8s.io/api/core/v1.ServiceAccountTokenProjection": {
+		"Audience":          {},
+		"ExpirationSeconds": {},
+		"Path":              {},
+	},
+	"k8s.io/api/core/v1.KeyToPath": {
+		"Key":  {},
+		"Path": {},
+		"Mode": {},
+	},
+	"k8s.io/api/core/v1.PodSpec": {
+		"ServiceAccountName": {},
+		"Containers":         {},
+		"Volumes":            {},
+		"ImagePullSecrets":   {},
+		"EnableServiceLinks": {},
+		// Features
+		"Affinity":        {},
+		"HostAliases":     {},
+		"NodeSelector":    {},
+		"Tolerations":     {},
+		"SecurityContext": {},
+	},
+	"k8s.io/api/core/v1.Container": {
+		"Name":                     {forceOptional: true},
+		"Args":                     {},
+		"Command":                  {},
+		"Env":                      {},
+		"WorkingDir":               {},
+		"EnvFrom":                  {},
+		"Image":                    {},
+		"ImagePullPolicy":          {},
+		"LivenessProbe":            {},
+		"Ports":                    {forceOptional: true},
+		"ReadinessProbe":           {},
+		"Resources":                {},
+		"SecurityContext":          {},
+		"TerminationMessagePath":   {},
+		"TerminationMessagePolicy": {},
+		"VolumeMounts":             {},
+	},
+	"k8s.io/api/core/v1.VolumeMount": {
+		"Name":      {},
+		"ReadOnly":  {},
+		"MountPath": {},
+		"SubPath":   {},
+	},
+	"k8s.io/api/core/v1.Probe": {
+		"Handler":             {},
+		"InitialDelaySeconds": {},
+		"TimeoutSeconds":      {},
+		"PeriodSeconds":       {},
+		"SuccessThreshold":    {},
+		"FailureThreshold":    {},
+	},
+	"k8s.io/api/core/v1.Handler": {
+		"Exec":      {},
+		"HTTPGet":   {},
+		"TCPSocket": {},
+	},
+	"k8s.io/api/core/v1.ExecAction": {
+		"Command": {},
+	},
+	"k8s.io/api/core/v1.HTTPGetAction": {
+		"Host":        {},
+		"Path":        {},
+		"Scheme":      {},
+		"HTTPHeaders": {},
+	},
+	"k8s.io/api/core/v1.TCPSocketAction": {
+		"Host": {},
+	},
+	"k8s.io/api/core/v1.ContainerPort": {
+		"ContainerPort": {},
+		"Name":          {},
+		"Protocol":      {},
+	},
+	"k8s.io/api/core/v1.EnvVar": {
+		"Name":      {},
+		"Value":     {},
+		"ValueFrom": {},
+	},
+	"k8s.io/api/core/v1.EnvVarSource": {
+		"ConfigMapKeyRef": {},
+		"SecretKeyRef":    {},
+		// Features
+		"FieldRef":         {},
+		"ResourceFieldRef": {},
+	},
+	"k8s.io/api/core/v1.LocalObjectReference": {
+		"Name": {},
+	},
+	"k8s.io/api/core/v1.ConfigMapKeySelectorMask": {
+		"Key":                  {},
+		"Optional":             {},
+		"LocalObjectReference": {},
+	},
+	"k8s.io/api/core/v1.SecretKeySelectorMask": {
+		"Key":                  {},
+		"Optional":             {},
+		"LocalObjectReference": {},
+	},
+	"k8s.io/api/core/v1.ConfigMapEnvSource": {
+		"Optional":             {},
+		"LocalObjectReference": {},
+	},
+	"k8s.io/api/core/v1.SecretEnvSource": {
+		"Optional":             {},
+		"LocalObjectReference": {},
+	},
+	"k8s.io/api/core/v1.EnvFromSource": {
+		"Prefix":       {},
+		"ConfigMapRef": {},
+		"SecretRef":    {},
+	},
+	"k8s.io/api/core/v1.ResourceRequirementsMask": {
+		"Limits":   {},
+		"Requests": {},
+	},
+	"k8s.io/api/core/v1.PodSecurityContext": {
+		"RunAsUser":          {},
+		"RunAsGroup":         {},
+		"RunAsNonRoot":       {},
+		"FSGroup":            {},
+		"SupplementalGroups": {},
+	},
+	"k8s.io/api/core/v1.SecurityContext": {
+		"RunAsUser":              {},
+		"ReadOnlyRootFilesystem": {},
+		// Features
+		"RunAsGroup":   {},
+		"RunAsNonRoot": {},
+	},
+	"k8s.io/api/core/v1.ObjectReference": {
+		"APIVersion": {},
+		"Kind":       {},
+		"Name":       {},
+	},
+}
+
 // structToSchema creates a schema for the given struct.  Embedded fields are placed in AllOf,
 // and can be flattened later with a Flattener.
 func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSONSchemaProps {
@@ -331,7 +500,18 @@ func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSON
 		return props
 	}
 
+	allowedFields := allowedFields[ctx.pkg.ID+"."+ctx.info.RawSpec.Name.String()]
 	for _, field := range ctx.info.Fields {
+
+		var overrides schemaOverrides
+		if allowedFields != nil {
+			if o, ok := allowedFields[field.Name]; !ok {
+				continue
+			} else {
+				overrides = o
+			}
+		}
+
 		jsonTag, hasTag := field.Tag.Lookup("json")
 		if !hasTag {
 			// if the field doesn't have a JSON tag, it doesn't belong in output (and shouldn't exist in a serialized type)
@@ -359,7 +539,7 @@ func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSON
 
 		// if no default required mode is set, default to required
 		defaultMode := "required"
-		if ctx.PackageMarkers.Get("kubebuilder:validation:Optional") != nil {
+		if ctx.PackageMarkers.Get("kubebuilder:validation:Optional") != nil || overrides.forceOptional {
 			defaultMode = "optional"
 		}
 
