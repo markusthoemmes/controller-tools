@@ -330,6 +330,10 @@ var perserveUnknownOverrides = map[string]bool{
 	"k8s.io/api/core/v1.HTTPGetAction":   true,
 	"k8s.io/api/core/v1.TCPSocketAction": true,
 	"k8s.io/api/core/v1.ContainerPort":   true,
+
+	// Allow extra fields as features
+	"k8s.io/api/core/v1.SecurityContext": true,
+	"k8s.io/api/core/v1.EnvVarSource":    true,
 }
 
 var allowedFields = map[string]map[string]schemaOverrides{
@@ -374,11 +378,11 @@ var allowedFields = map[string]map[string]schemaOverrides{
 		"ImagePullSecrets":   {},
 		"EnableServiceLinks": {},
 		// Features
-		"Affinity":        {},
-		"HostAliases":     {},
-		"NodeSelector":    {},
-		"Tolerations":     {},
-		"SecurityContext": {},
+		//"Affinity":        {},
+		//"HostAliases":     {},
+		//"NodeSelector":    {},
+		//"Tolerations":     {},
+		//"SecurityContext": {},
 	},
 	"k8s.io/api/core/v1.Container": {
 		"Name":                     {forceOptional: true},
@@ -445,8 +449,8 @@ var allowedFields = map[string]map[string]schemaOverrides{
 		"ConfigMapKeyRef": {},
 		"SecretKeyRef":    {},
 		// Features
-		"FieldRef":         {},
-		"ResourceFieldRef": {},
+		//"FieldRef":         {},
+		//"ResourceFieldRef": {},
 	},
 	"k8s.io/api/core/v1.LocalObjectReference": {
 		"Name": {},
@@ -489,8 +493,8 @@ var allowedFields = map[string]map[string]schemaOverrides{
 		"RunAsUser":              {},
 		"ReadOnlyRootFilesystem": {},
 		// Features
-		"RunAsGroup":   {},
-		"RunAsNonRoot": {},
+		//"RunAsGroup":   {},
+		//"RunAsNonRoot": {},
 	},
 	"k8s.io/api/core/v1.ObjectReference": {
 		"APIVersion": {},
