@@ -20,14 +20,46 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+	"io/ioutil"
+	"log"
 	"strings"
 
+	"gopkg.in/yaml.v3"
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	crdmarkers "sigs.k8s.io/controller-tools/pkg/crd/markers"
 
 	"sigs.k8s.io/controller-tools/pkg/loader"
 	"sigs.k8s.io/controller-tools/pkg/markers"
 )
+
+type overrides struct {
+	PreserveUnknownFields *bool  `yaml:"preserveUnknownFields"`
+	Optional              bool   `yaml:"optional"`
+	Description           string `yaml:"description"`
+}
+
+type typeOverrides struct {
+	overrides      `yaml:",inline"`
+	AllowedFields  []string             `yaml:"allowedFields"`
+	FieldOverrides map[string]overrides `yaml:"fieldOverrides"`
+}
+
+type config map[string]typeOverrides
+
+var c config = map[string]typeOverrides{}
+
+func init() {
+	yamlFile, err := ioutil.ReadFile(".schemapatch.yaml")
+	if err != nil {
+		log.Fatalf("Failed to open config file: %v", err)
+	}
+	err = yaml.Unmarshal(yamlFile, c)
+	if err != nil {
+		log.Fatalf("Failed to parse config file: %v", err)
+	}
+
+}
 
 // Schema flattening is done in a recursive mapping method.
 // Start reading at infoToSchema.
@@ -318,195 +350,6 @@ func mapToSchema(ctx *schemaContext, mapType *ast.MapType) *apiext.JSONSchemaPro
 	}
 }
 
-type schemaOverrides struct {
-	forceOptional bool
-	description   string
-}
-
-// Preserve unknown fields for a few types to allow for proper validation.
-var perserveUnknownOverrides = map[string]bool{
-	"k8s.io/api/core/v1.PodSpec":         true,
-	"k8s.io/api/core/v1.Container":       true,
-	"k8s.io/api/core/v1.HTTPGetAction":   true,
-	"k8s.io/api/core/v1.TCPSocketAction": true,
-	"k8s.io/api/core/v1.ContainerPort":   true,
-
-	// Allow extra fields as features
-	"k8s.io/api/core/v1.SecurityContext": true,
-	"k8s.io/api/core/v1.EnvVarSource":    true,
-}
-
-var allowedFields = map[string]map[string]schemaOverrides{
-	"k8s.io/api/core/v1.Volume": {
-		"Name":         {},
-		"VolumeSource": {},
-	},
-	"k8s.io/api/core/v1.VolumeSource": {
-		"Secret":    {},
-		"ConfigMap": {},
-		"Projected": {},
-	},
-	"k8s.io/api/core/v1.VolumeProjection": {
-		"Secret":              {},
-		"ConfigMap":           {},
-		"ServiceAccountToken": {},
-	},
-	"k8s.io/api/core/v1.ConfigMapProjection": {
-		"LocalObjectReference": {},
-		"Items":                {},
-		"Optional":             {},
-	},
-	"k8s.io/api/core/v1.SecretProjection": {
-		"LocalObjectReference": {},
-		"Items":                {},
-		"Optional":             {},
-	},
-	"k8s.io/api/core/v1.ServiceAccountTokenProjection": {
-		"Audience":          {},
-		"ExpirationSeconds": {},
-		"Path":              {},
-	},
-	"k8s.io/api/core/v1.KeyToPath": {
-		"Key":  {},
-		"Path": {},
-		"Mode": {},
-	},
-	"k8s.io/api/core/v1.PodSpec": {
-		"ServiceAccountName": {},
-		"Containers":         {},
-		"Volumes":            {},
-		"ImagePullSecrets":   {},
-		"EnableServiceLinks": {},
-		// Features
-		//"Affinity":        {},
-		//"HostAliases":     {},
-		//"NodeSelector":    {},
-		//"Tolerations":     {},
-		//"SecurityContext": {},
-	},
-	"k8s.io/api/core/v1.Container": {
-		"Name":                     {forceOptional: true},
-		"Args":                     {},
-		"Command":                  {},
-		"Env":                      {},
-		"WorkingDir":               {},
-		"EnvFrom":                  {},
-		"Image":                    {},
-		"ImagePullPolicy":          {},
-		"LivenessProbe":            {},
-		"Ports":                    {forceOptional: true},
-		"ReadinessProbe":           {},
-		"Resources":                {},
-		"SecurityContext":          {},
-		"TerminationMessagePath":   {},
-		"TerminationMessagePolicy": {},
-		"VolumeMounts":             {},
-	},
-	"k8s.io/api/core/v1.VolumeMount": {
-		"Name":      {},
-		"ReadOnly":  {},
-		"MountPath": {},
-		"SubPath":   {},
-	},
-	"k8s.io/api/core/v1.Probe": {
-		"Handler":             {},
-		"InitialDelaySeconds": {},
-		"TimeoutSeconds":      {},
-		"PeriodSeconds": {
-			description: "How often (in seconds) to perform the probe.",
-		},
-		"SuccessThreshold": {},
-		"FailureThreshold": {},
-	},
-	"k8s.io/api/core/v1.Handler": {
-		"Exec":      {},
-		"HTTPGet":   {},
-		"TCPSocket": {},
-	},
-	"k8s.io/api/core/v1.ExecAction": {
-		"Command": {},
-	},
-	"k8s.io/api/core/v1.HTTPGetAction": {
-		"Host":        {},
-		"Path":        {},
-		"Scheme":      {},
-		"HTTPHeaders": {},
-	},
-	"k8s.io/api/core/v1.TCPSocketAction": {
-		"Host": {},
-	},
-	"k8s.io/api/core/v1.ContainerPort": {
-		"ContainerPort": {},
-		"Name":          {},
-		"Protocol":      {},
-	},
-	"k8s.io/api/core/v1.EnvVar": {
-		"Name":      {},
-		"Value":     {},
-		"ValueFrom": {},
-	},
-	"k8s.io/api/core/v1.EnvVarSource": {
-		"ConfigMapKeyRef": {},
-		"SecretKeyRef":    {},
-		// Features
-		//"FieldRef":         {},
-		//"ResourceFieldRef": {},
-	},
-	"k8s.io/api/core/v1.LocalObjectReference": {
-		"Name": {},
-	},
-	"k8s.io/api/core/v1.ConfigMapKeySelectorMask": {
-		"Key":                  {},
-		"Optional":             {},
-		"LocalObjectReference": {},
-	},
-	"k8s.io/api/core/v1.SecretKeySelectorMask": {
-		"Key":                  {},
-		"Optional":             {},
-		"LocalObjectReference": {},
-	},
-	"k8s.io/api/core/v1.ConfigMapEnvSource": {
-		"Optional":             {},
-		"LocalObjectReference": {},
-	},
-	"k8s.io/api/core/v1.SecretEnvSource": {
-		"Optional":             {},
-		"LocalObjectReference": {},
-	},
-	"k8s.io/api/core/v1.EnvFromSource": {
-		"Prefix":       {},
-		"ConfigMapRef": {},
-		"SecretRef":    {},
-	},
-	"k8s.io/api/core/v1.ResourceRequirementsMask": {
-		"Limits":   {},
-		"Requests": {},
-	},
-	"k8s.io/api/core/v1.PodSecurityContext": {
-		"RunAsUser":          {},
-		"RunAsGroup":         {},
-		"RunAsNonRoot":       {},
-		"FSGroup":            {},
-		"SupplementalGroups": {},
-	},
-	"k8s.io/api/core/v1.SecurityContext": {
-		"RunAsUser":              {},
-		"ReadOnlyRootFilesystem": {},
-		"Capabilities":           {},
-		// Features
-		//"RunAsGroup":   {},
-		//"RunAsNonRoot": {},
-	},
-	"k8s.io/api/core/v1.Capabilities": {
-		"Drop": {},
-	},
-	"k8s.io/api/core/v1.ObjectReference": {
-		"APIVersion": {},
-		"Kind":       {},
-		"Name":       {},
-	},
-}
-
 // structToSchema creates a schema for the given struct.  Embedded fields are placed in AllOf,
 // and can be flattened later with a Flattener.
 func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSONSchemaProps {
@@ -521,7 +364,7 @@ func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSON
 	}
 
 	typN := ctx.pkg.ID + "." + ctx.info.RawSpec.Name.String()
-	allowedFields := allowedFields[typN]
+	allowedFields := sets.NewString(c[typN].AllowedFields...)
 	for _, field := range ctx.info.Fields {
 		fieldN := field.Name
 		if fieldN == "" {
@@ -538,12 +381,12 @@ func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSON
 			}
 		}
 
-		var overrides schemaOverrides
-		if allowedFields != nil {
-			if o, ok := allowedFields[fieldN]; !ok {
+		var overs overrides
+		if allowedFields.Len() > 0 {
+			if !allowedFields.Has(fieldN) {
 				continue
 			} else {
-				overrides = o
+				overs = c[typN].FieldOverrides[fieldN]
 			}
 		}
 
@@ -574,7 +417,7 @@ func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSON
 
 		// if no default required mode is set, default to required
 		defaultMode := "required"
-		if ctx.PackageMarkers.Get("kubebuilder:validation:Optional") != nil || overrides.forceOptional {
+		if ctx.PackageMarkers.Get("kubebuilder:validation:Optional") != nil || overs.Optional {
 			defaultMode = "optional"
 		}
 
@@ -601,8 +444,8 @@ func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSON
 			propSchema = typeToSchema(ctx.ForInfo(&markers.TypeInfo{}), field.RawField.Type)
 		}
 
-		if overrides.description != "" {
-			propSchema.Description = overrides.description
+		if overs.Description != "" {
+			propSchema.Description = overs.Description
 		} else {
 			propSchema.Description = field.Doc
 		}
@@ -617,8 +460,8 @@ func structToSchema(ctx *schemaContext, structType *ast.StructType) *apiext.JSON
 		props.Properties[fieldName] = *propSchema
 	}
 
-	if preserveUnknown, ok := perserveUnknownOverrides[typN]; ok {
-		props.XPreserveUnknownFields = &preserveUnknown
+	if c[typN].PreserveUnknownFields != nil {
+		props.XPreserveUnknownFields = c[typN].PreserveUnknownFields
 	}
 
 	return props
