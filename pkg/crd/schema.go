@@ -492,9 +492,13 @@ var allowedFields = map[string]map[string]schemaOverrides{
 	"k8s.io/api/core/v1.SecurityContext": {
 		"RunAsUser":              {},
 		"ReadOnlyRootFilesystem": {},
+		"Capabilities":           {},
 		// Features
 		//"RunAsGroup":   {},
 		//"RunAsNonRoot": {},
+	},
+	"k8s.io/api/core/v1.Capabilities": {
+		"Drop": {},
 	},
 	"k8s.io/api/core/v1.ObjectReference": {
 		"APIVersion": {},
