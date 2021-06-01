@@ -22,6 +22,7 @@ import (
 	"go/types"
 	"io/ioutil"
 	"log"
+	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -50,7 +51,7 @@ type config map[string]typeOverrides
 var c config = map[string]typeOverrides{}
 
 func init() {
-	yamlFile, err := ioutil.ReadFile(".schemapatch.yaml")
+	yamlFile, err := ioutil.ReadFile(os.Getenv("SCHEMAPATCH_CONFIG_FILE"))
 	if err != nil {
 		log.Fatalf("Failed to open config file: %v", err)
 	}
